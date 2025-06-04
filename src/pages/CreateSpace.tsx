@@ -107,7 +107,7 @@ export default function CreateSpace() {
         </a>
       </div>
 
-      <div className="text-xs text-blue-300 mt-8 text-center">
+      <div className="text-xs text-blue-300 mt-8 text-center sm:hidden">
         Made by Grandpa1001 •{" "}
         <button
           onClick={() =>

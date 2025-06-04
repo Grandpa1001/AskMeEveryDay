@@ -11,6 +11,10 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 
+interface QuestionData {
+  text: string;
+}
+
 function isToday(dateStr: string | undefined): boolean {
   if (!dateStr) return false;
   const savedDate = new Date(dateStr);
@@ -130,7 +134,10 @@ export default function Dashboard() {
     }
 
     const snapshot = await getDocs(collection(db, "spaces", uid!, "questions"));
-    const all = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const all = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as QuestionData)
+    }));
 
     if (all.length === 0) {
       setError("Przestrzeń nie posiada pytań.");
@@ -289,7 +296,7 @@ export default function Dashboard() {
         </div>
 
       </div>
-      <div className="text-xs text-blue-300 mt-8 text-center">
+      <div className="text-xs text-blue-300 mt-8 text-center sm:hidden">
         Made by Grandpa1001 •{" "}
         <button
           onClick={() =>
