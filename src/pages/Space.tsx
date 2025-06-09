@@ -10,9 +10,11 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
+import { encrypt, decrypt } from "../utils/encryption";
 
 interface QuestionData {
-  text: string;
+  text?: string;
+  encryptedText?: string;
 }
 
 function isToday(dateStr: string | undefined): boolean {
@@ -98,8 +100,9 @@ export default function Space() {
       return;
     }
 
+    const encryptedText = encrypt(newQuestion.trim());
     await addDoc(collection(db, "spaces", uid!, "questions"), {
-      text: newQuestion.trim(),
+      encryptedText,
     });
 
     const newAddCount = (space.dailyStats.addCount || 0) + 1;
@@ -145,6 +148,17 @@ export default function Space() {
     }
 
     const random = all[Math.floor(Math.random() * all.length)];
+    
+    // Obsługa starego i nowego formatu
+    let questionText: string;
+    if (random.encryptedText) {
+      questionText = decrypt(random.encryptedText);
+    } else if (random.text) {
+      questionText = random.text;
+    } else {
+      setError("Nieprawidłowy format pytania.");
+      return;
+    }
 
     await deleteDoc(doc(db, "spaces", uid!, "questions", random.id));
 
@@ -155,7 +169,7 @@ export default function Space() {
       "dailyStats.date": new Date().toISOString(),
     });
 
-    setQuestion(random.text);
+    setQuestion(questionText);
 
     setSpace((prev: any) => ({
       ...prev,
