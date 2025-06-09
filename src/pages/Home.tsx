@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
@@ -7,6 +7,13 @@ export default function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedCode = localStorage.getItem("lastSpaceCode");
+    if (savedCode) {
+      setJoinCode(savedCode);
+    }
+  }, []);
 
   const handleJoin = async () => {
     setError("");
@@ -17,6 +24,7 @@ export default function Home() {
       return;
     }
 
+    localStorage.setItem("lastSpaceCode", trimmed);
     const ref = doc(db, "spaces", trimmed);
     const snap = await getDoc(ref);
 
