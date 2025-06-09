@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import CreateSpace from "./pages/CreateSpace";
-import Dashboard from "./pages/Dashboard";
+import Space from "./pages/Space";
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/create" element={<CreateSpace />} />
-        <Route path="/space/:uid" element={<Dashboard />} />
+        <Route path="/space/:uid" element={<Space />} />
       </Routes>
     </BrowserRouter>
   );

@@ -26,7 +26,7 @@ function isToday(dateStr: string | undefined): boolean {
   );
 }
 
-export default function Dashboard() {
+export default function Space() {
   const { uid } = useParams();
   const [space, setSpace] = useState<any>(null);
   const [loading, setLoading] = useState(true);
