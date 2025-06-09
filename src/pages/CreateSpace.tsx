@@ -6,13 +6,42 @@ import { generateUID } from "../utils/generateUID";
 
 export default function CreateSpace() {
   const [name, setName] = useState("");
-  const [maxAdd, setMaxAdd] = useState(1);
-  const [maxDraw, setMaxDraw] = useState(1);
+  const [maxAdd, setMaxAdd] = useState("1");
+  const [maxDraw, setMaxDraw] = useState("1");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const handleNumberChange = (value: string, setter: (value: string) => void) => {
+    // Pozwól na puste pole
+    if (value === "") {
+      setter("");
+      return;
+    }
+
+    // Usuń wszystkie znaki oprócz cyfr
+    const numbersOnly = value.replace(/\D/g, "");
+    
+    // Jeśli nie ma cyfr, ustaw 1
+    if (numbersOnly === "") {
+      setter("1");
+      return;
+    }
+
+    // Konwertuj na liczbę i sprawdź zakres
+    const num = parseInt(numbersOnly, 10);
+    if (num > 99) {
+      setter("99");
+    } else if (num < 1) {
+      setter("1");
+    } else {
+      setter(numbersOnly);
+    }
+  };
+
   const handleCreate = async () => {
     if (!name.trim()) return alert("Wprowadź nazwę przestrzeni");
+    if (!maxAdd || !maxDraw) return alert("Wprowadź poprawne wartości dla limitów");
+    
     setLoading(true);
     let uid = "";
     let exists = true;
@@ -61,14 +90,8 @@ export default function CreateSpace() {
           <input
             type="text"
             inputMode="numeric"
-            pattern="[0-9]*"
-            min={1}
-            max={99}
             value={maxAdd}
-            onChange={e => {
-              const val = e.target.value.replace(/\D/g, "");
-              setMaxAdd(val ? Math.max(1, Math.min(99, Number(val))) : 1);
-            }}
+            onChange={(e) => handleNumberChange(e.target.value, setMaxAdd)}
             className="w-full border border-blue-300 rounded-md p-2 bg-blue-50 text-black focus:outline-none focus:ring-2 focus:ring-blue-400 text-center"
             maxLength={2}
           />
@@ -79,14 +102,8 @@ export default function CreateSpace() {
           <input
             type="text"
             inputMode="numeric"
-            pattern="[0-9]*"
-            min={1}
-            max={99}
             value={maxDraw}
-            onChange={e => {
-              const val = e.target.value.replace(/\D/g, "");
-              setMaxDraw(val ? Math.max(1, Math.min(99, Number(val))) : 1);
-            }}
+            onChange={(e) => handleNumberChange(e.target.value, setMaxDraw)}
             className="w-full border border-blue-300 rounded-md p-2 bg-blue-50 text-black focus:outline-none focus:ring-2 focus:ring-blue-400 text-center"
             maxLength={2}
           />
@@ -94,8 +111,9 @@ export default function CreateSpace() {
         </div>
         <button
           onClick={handleCreate}
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded-md font-semibold hover:bg-blue-700 transition"
+          disabled={loading || !maxAdd || !maxDraw}
+          className={`w-full py-3 rounded-md font-semibold text-white transition
+            ${loading || !maxAdd || !maxDraw ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
         >
           {loading ? "Tworzenie..." : "Utwórz przestrzeń"}
         </button>
