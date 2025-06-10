@@ -11,10 +11,25 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { encrypt, decrypt } from "../utils/encryption";
+import { log, logError } from "../utils/logger";
 
 interface QuestionData {
   text?: string;
   encryptedText?: string;
+}
+
+interface SpaceData {
+  id: string;
+  name: string;
+  config: {
+    maxDailyAdd: number;
+    maxDailyDraw: number;
+  };
+  dailyStats: {
+    addCount: number;
+    drawCount: number;
+    date: string;
+  };
 }
 
 function isToday(dateStr: string | undefined): boolean {
@@ -29,8 +44,8 @@ function isToday(dateStr: string | undefined): boolean {
 }
 
 export default function Space() {
-  const { uid } = useParams();
-  const [space, setSpace] = useState<any>(null);
+  const { spaceId } = useParams<{ spaceId: string }>();
+  const [space, setSpace] = useState<SpaceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [question, setQuestion] = useState<string | null>(null);
   const [newQuestion, setNewQuestion] = useState("");
@@ -41,55 +56,72 @@ export default function Space() {
   const [hasQuestions, setHasQuestions] = useState(true);
   const [questionCount, setQuestionCount] = useState<number>(0);
 
-
   useEffect(() => {
-    if (!uid) return;
-
     const load = async () => {
-      const ref = doc(db, "spaces", uid);
-      const snap = await getDoc(ref);
+      try {
+        if (!spaceId) {
+          logError("Brak spaceId w parametrach");
+          setError("Nieprawidłowy identyfikator przestrzeni");
+          setLoading(false);
+          return;
+        }
 
-      if (!snap.exists()) {
-        setError("Nie znaleziono przestrzeni.");
+        log("Ładowanie przestrzeni o spaceId:", spaceId);
+        const ref = doc(db, "spaces", spaceId);
+        const snap = await getDoc(ref);
+
+        if (!snap.exists()) {
+          logError("Nie znaleziono przestrzeni o spaceId:", spaceId);
+          setError("Nie znaleziono przestrzeni.");
+          setLoading(false);
+          return;
+        }
+
+        const data = snap.data();
+        log("Pobrane dane przestrzeni:", data);
+
+        // Sprawdzenie daty i reset liczników jeśli inny dzień
+        const isStatsToday = isToday(data.dailyStats?.date);
+
+        const dailyStats = isStatsToday
+          ? data.dailyStats
+          : {
+              addCount: 0,
+              drawCount: 0,
+              date: new Date().toISOString(),
+            };
+
+        // Aktualizacja licznika w bazie jeśli resetujemy
+        if (!isStatsToday) {
+          await updateDoc(ref, { dailyStats });
+        }
+
+        const spaceData = { id: snap.id, ...data, dailyStats } as SpaceData;
+        log("Przygotowane dane przestrzeni:", spaceData);
+        setSpace(spaceData);
         setLoading(false);
-        return;
+
+        // Sprawdzenie dostępności akcji
+        setCanAdd(dailyStats.addCount < data.config.maxDailyAdd);
+        setCanDraw(dailyStats.drawCount < data.config.maxDailyDraw);
+
+        // Sprawdzenie czy są pytania
+        const questionsSnap = await getDocs(collection(db, "spaces", spaceId, "questions"));
+        setHasQuestions(questionsSnap.size > 0);
+        setQuestionCount(questionsSnap.size);
+      } catch (err) {
+        logError("Błąd podczas ładowania przestrzeni:", err);
+        setError("Wystąpił błąd podczas ładowania przestrzeni.");
+        setLoading(false);
       }
-
-      const data = snap.data();
-
-      // Sprawdzenie daty i reset liczników jeśli inny dzień
-      const isStatsToday = isToday(data.dailyStats?.date);
-
-      const dailyStats = isStatsToday
-        ? data.dailyStats
-        : {
-            addCount: 0,
-            drawCount: 0,
-            date: new Date().toISOString(),
-          };
-
-      // Aktualizacja licznika w bazie jeśli resetujemy
-      if (!isStatsToday) {
-        await updateDoc(ref, { dailyStats });
-      }
-
-      setSpace({ id: snap.id, ...data, dailyStats });
-      setLoading(false);
-
-      // Sprawdzenie dostępności akcji
-      setCanAdd(dailyStats.addCount < data.config.maxDailyAdd);
-      setCanDraw(dailyStats.drawCount < data.config.maxDailyDraw);
-
-      // Sprawdzenie czy są pytania
-      const questionsSnap = await getDocs(collection(db, "spaces", uid, "questions"));
-      setHasQuestions(questionsSnap.size > 0);
-      setQuestionCount(questionsSnap.size);
     };
 
     load();
-  }, [uid]);
+  }, [spaceId]);
 
   const handleAddQuestion = async () => {
+    if (!space || !spaceId) return;
+    
     setError("");
     if (!newQuestion.trim()) {
       setError("Wpisz pytanie przed dodaniem.");
@@ -101,21 +133,21 @@ export default function Space() {
     }
 
     const encryptedText = encrypt(newQuestion.trim());
-    await addDoc(collection(db, "spaces", uid!, "questions"), {
+    await addDoc(collection(db, "spaces", spaceId, "questions"), {
       encryptedText,
     });
 
     const newAddCount = (space.dailyStats.addCount || 0) + 1;
 
-    await updateDoc(doc(db, "spaces", uid!), {
+    await updateDoc(doc(db, "spaces", spaceId), {
       "dailyStats.addCount": newAddCount,
       "dailyStats.date": new Date().toISOString(),
     });
 
-    setSpace((prev: any) => ({
-      ...prev,
+    setSpace((prev) => ({
+      ...prev!,
       dailyStats: {
-        ...prev.dailyStats,
+        ...prev!.dailyStats,
         addCount: newAddCount,
       },
     }));
@@ -124,19 +156,21 @@ export default function Space() {
     setCanAdd(newAddCount < space.config.maxDailyAdd);
 
     // Sprawdzenie czy są pytania po dodaniu
-    const questionsSnap = await getDocs(collection(db, "spaces", uid!, "questions"));
+    const questionsSnap = await getDocs(collection(db, "spaces", spaceId, "questions"));
     setHasQuestions(questionsSnap.size > 0);
     setQuestionCount(questionsSnap.size);
   };
 
   const handleDrawQuestion = async () => {
+    if (!space || !spaceId) return;
+    
     setError("");
     if (!canDraw) {
       setError("Osiągnięto dzienny limit losowań.");
       return;
     }
 
-    const snapshot = await getDocs(collection(db, "spaces", uid!, "questions"));
+    const snapshot = await getDocs(collection(db, "spaces", spaceId, "questions"));
     const all = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...(doc.data() as QuestionData)
@@ -160,21 +194,21 @@ export default function Space() {
       return;
     }
 
-    await deleteDoc(doc(db, "spaces", uid!, "questions", random.id));
+    await deleteDoc(doc(db, "spaces", spaceId, "questions", random.id));
 
     const newDrawCount = (space.dailyStats.drawCount || 0) + 1;
 
-    await updateDoc(doc(db, "spaces", uid!), {
+    await updateDoc(doc(db, "spaces", spaceId), {
       "dailyStats.drawCount": newDrawCount,
       "dailyStats.date": new Date().toISOString(),
     });
 
     setQuestion(questionText);
 
-    setSpace((prev: any) => ({
-      ...prev,
+    setSpace((prev) => ({
+      ...prev!,
       dailyStats: {
-        ...prev.dailyStats,
+        ...prev!.dailyStats,
         drawCount: newDrawCount,
       },
     }));
@@ -182,7 +216,7 @@ export default function Space() {
     setCanDraw(newDrawCount < space.config.maxDailyDraw);
 
     // Sprawdzenie czy są jeszcze pytania po losowaniu
-    const questionsSnap = await getDocs(collection(db, "spaces", uid!, "questions"));
+    const questionsSnap = await getDocs(collection(db, "spaces", spaceId, "questions"));
     setHasQuestions(questionsSnap.size > 0);
     setQuestionCount(questionsSnap.size);
   };
@@ -193,17 +227,34 @@ export default function Space() {
     );
     if (!confirm) return;
 
-    await deleteDoc(doc(db, "spaces", uid!));
+    await deleteDoc(doc(db, "spaces", spaceId!));
     alert("Przestrzeń usunięta.");
     window.location.href = "/";
   };
 
-  if (loading) return <div className="p-4 text-center">Ładowanie...</div>;
-  if (error)
+  if (loading) {
     return (
-      <div className="p-4 text-center text-red-600 font-semibold">{error}</div>
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+        <div className="text-blue-600 text-lg">Ładowanie...</div>
+      </div>
     );
-  if (!space) return null;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+        <div className="text-red-600 text-lg font-semibold">{error}</div>
+      </div>
+    );
+  }
+
+  if (!space) {
+    return (
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+        <div className="text-red-600 text-lg font-semibold">Nie znaleziono przestrzeni</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center px-4">
@@ -211,7 +262,7 @@ export default function Space() {
         <h1 className="text-2xl font-semibold text-blue-600 mb-2">AskMeEveryDay</h1>
         <h2 className="text-3xl font-semibold text-blue-700 mb-4">{space.name}</h2>
         <p className="text-center text-sm text-blue-400 mb-6">
-          Kod przestrzeni: <span className="font-mono">{uid}</span>
+          Kod przestrzeni: <span className="font-mono">{spaceId}</span>
         </p>
         {questionCount > 0 && (
           <p className="text-center text-sm text-gray-500 mb-4">

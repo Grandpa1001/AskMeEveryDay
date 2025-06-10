@@ -1,6 +1,7 @@
 // src/firebase/firebase.ts
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { log, logError } from "../utils/logger";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,7 +12,15 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
   };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let db;
+
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  log("Firebase zainicjalizowany pomyślnie");
+} catch (error) {
+  logError("Błąd podczas inicjalizacji Firebase:", error);
+  throw error;
+}
 
 export { db };

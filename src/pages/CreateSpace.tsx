@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { generateUID } from "../utils/generateUID";
+import { log, logError } from "../utils/logger";
 
 export default function CreateSpace() {
   const [name, setName] = useState("");
@@ -51,21 +52,31 @@ export default function CreateSpace() {
       const snap = await getDoc(ref);
       exists = snap.exists();
     }
+
+    log("Tworzenie nowej przestrzeni o uid:", uid);
     const today = new Date().toISOString().split("T")[0];
-    await setDoc(doc(db, "spaces", uid), {
-      name,
-      createdAt: new Date(),
-      config: {
-        maxDailyAdd: Number(maxAdd),
-        maxDailyDraw: Number(maxDraw)
-      },
-      dailyStats: {
-        date: today,
-        addCount: 0,
-        drawCount: 0
-      }
-    });
-    navigate(`/space/${uid}`);
+    
+    try {
+      await setDoc(doc(db, "spaces", uid), {
+        name,
+        createdAt: new Date(),
+        config: {
+          maxDailyAdd: Number(maxAdd),
+          maxDailyDraw: Number(maxDraw)
+        },
+        dailyStats: {
+          date: today,
+          addCount: 0,
+          drawCount: 0
+        }
+      });
+      log("Przestrzeń utworzona pomyślnie:", uid);
+      navigate(`/space/${uid}`);
+    } catch (err) {
+      logError("Błąd podczas tworzenia przestrzeni:", err);
+      alert("Wystąpił błąd podczas tworzenia przestrzeni. Spróbuj ponownie.");
+      setLoading(false);
+    }
   };
 
   return (
